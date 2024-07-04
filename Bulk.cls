@@ -2,7 +2,7 @@ VERSION 1.0 CLASS
 BEGIN
   MultiUse = -1  'True
 END
-Attribute VB_Name = "Transaction"
+Attribute VB_Name = "Bulk"
 Attribute VB_GlobalNameSpace = False
 Attribute VB_Creatable = False
 Attribute VB_PredeclaredId = False
@@ -10,33 +10,28 @@ Attribute VB_Exposed = False
 Private m_Client As Blastengine
 Private m_DeliveryId As Long
 Private m_From As From
-Private m_To As String
-Private m_Cc() As String
-Private m_Bcc() As String
-Private m_InsertCode As Dictionary
+Private m_To() As Dictionary
 Private m_Subject As String
 Private m_ListUnsubscribe As ListUnsubscribe
 Private m_Encode As String
 Private m_TextPart As String
 Private m_HtmlPart As String
-Private m_Error As Dictionary
+Private m_Error As New Dictionary
 Private m_Attachments() As String
 Private m_Response As Dictionary
 
 Private Sub Class_Initialize()
     m_Encode = "UTF-8"
-    Set m_InsertCode = New Dictionary
-    Set m_Error = New Dictionary
 End Sub
 
 Property Let client(client As Blastengine)
     Set m_Client = client
 End Property
 
-Function Send() As Boolean
+Function Begin() As Boolean
     Dim dictResult As Dictionary
     Dim strPath As String
-    strPath = "/api/v1/deliveries/transaction"
+    strPath = "/api/v1/deliveries/bulk/begin"
     If (Not m_Attachments) = -1 Then
         Set dictResult = m_Client.SendText(HttpPost, strPath, New Dictionary, BuildParams)
     Else
@@ -45,26 +40,52 @@ Function Send() As Boolean
     If dictResult.Exists("error_messages") Then
         ' Error
         Set m_Error = dictResult("error_messages")
-        Send = False
+        Begin = False
     Else
         m_DeliveryId = dictResult("delivery_id")
-        Send = True
+        Begin = True
     End If
 End Function
 
-Property Let Email(ByVal Email As String)
-    m_To = Email
-End Property
+Function Update() As Boolean
+    Dim dictResult As Dictionary
+    Dim strPath As String
+    ' Debug.Print JsonConverter.ConvertToJson(BuildParams)
+    strPath = "/api/v1/deliveries/bulk/update/" & m_DeliveryId
+    Set dictResult = m_Client.SendText(httpPut, strPath, New Dictionary, BuildParams)
+    If dictResult.Exists("error_messages") Then
+        ' Error
+        Set m_Error = dictResult("error_messages")
+        Update = False
+    Else
+        ' m_DeliveryId = dictResult("delivery_id")
+        Update = True
+    End If
+    Set dictResult = Nothing
+End Function
 
-Property Let Cc(i As Long, ByVal Email As String)
-    ReDim Preserve m_Cc(i) As String
-    m_Cc(i) = Email
-End Property
-
-Property Let Bcc(i As Long, ByVal Email As String)
-    ReDim Preserve m_Bcc(i) As String
-    m_Bcc(i) = Email
-End Property
+Function Send(Optional ByVal dateReservationTime As Date = -1) As Boolean
+    Dim dictResult As Dictionary
+    Dim strPath As String
+    Dim dictBody As New Dictionary
+    
+    strPath = "/api/v1/deliveries/bulk/commit/" & m_DeliveryId
+    If dateReservationTime = -1 Then
+        strPath = strPath & "/immediate"
+    Else
+        Debug.Print m_Client.ConvertToISO8601(dateReservationTime)
+        dictBody.Add "reservation_time", m_Client.ConvertToISO8601(dateReservationTime)
+    End If
+    Set dictResult = m_Client.SendText(httpPatch, strPath, New Dictionary, dictBody)
+    If dictResult.Exists("error_messages") Then
+        ' Error
+        Set m_Error = dictResult("error_messages")
+        Send = False
+    Else
+        ' m_DeliveryId = dictResult("delivery_id")
+        Send = True
+    End If
+End Function
 
 Property Get DeliveryId() As Long
     DeliveryId = m_DeliveryId
@@ -73,6 +94,20 @@ End Property
 Property Get Error() As Dictionary
     Set Error = m_Error
 End Property
+
+Sub Email(ByVal Email As String, Optional ByVal InsertCode As Dictionary = -1)
+    Dim i As Long
+    If (Not m_To) <> -1 Then
+        i = UBound(m_To) + 1
+    End If
+    ReDim Preserve m_To(i) As Dictionary
+    Dim Params As New Dictionary
+    Params.Add "email", Email
+    If InsertCode.Count > 0 Then
+        Params.Add "insert_code", InsertCode
+    End If
+    Set m_To(i) = Params
+End Sub
 
 Sub From(Email As String, Optional Name As String = "")
     Dim From As From
@@ -106,9 +141,6 @@ Property Let ListUnsubscribe(ListUnsubscribe As ListUnsubscribe)
     m_ListUnsubscribe = ListUnsubscribe
 End Property
 
-Property Let InsertCode(ByVal InsertCode As Dictionary)
-    Set m_InsertCode = InsertCode
-End Property
 
 Function BuildParams() As Dictionary
     Set BuildParams = New Dictionary
@@ -119,28 +151,11 @@ Function BuildParams() As Dictionary
         From.Add "name", m_From.Name
     End If
     BuildParams.Add "from", From
-    BuildParams.Add "to", m_To
-    If (Not m_Cc) <> -1 Then
-        BuildParams.Add "cc", m_Cc
-    End If
-    If (Not m_Bcc) <> -1 Then
-        BuildParams.Add "bcc", m_Bcc
-    End If
-    Dim Key As Variant
-    Dim i As Long
-    i = 0
-    Dim InsertCodes() As Dictionary
-    InsertCodes = m_Client.InsertCodeToArray(m_InsertCode)
-    If (Not InsertCodes) <> -1 Then
-        BuildParams.Add "insert_code", InsertCodes
-    End If
     BuildParams.Add "subject", m_Subject
     BuildParams.Add "text_part", m_TextPart
     If m_HtmlPart <> "" Then
         BuildParams.Add "html_part", m_HtmlPart
     End If
-    BuildParams.Add "encode", m_Encode
-    
     If m_ListUnsubscribe.Email <> "" Or m_ListUnsubscribe.Url <> "" Then
         Dim ListUnsubscribe As Dictionary
         Set ListUnsubscribe = New Dictionary
@@ -153,4 +168,29 @@ Function BuildParams() As Dictionary
         BuildParams.Add "list_unsubscribe", ListUnsubscribe
     End If
 
+    If m_DeliveryId = 0 Then
+        ' Only first time
+        BuildParams.Add "encode", m_Encode
+    Else
+        ' Only update
+        Dim Val As Variant
+        Dim aryTo() As Dictionary
+        ReDim aryTo(UBound(m_To)) As Dictionary
+        Dim i As Long
+        Dim Params As New Dictionary
+        For Each Val In m_To
+            Set Params = Val
+            If Params.Exists("insert_code") Then
+                Dim InsertCodes() As Dictionary
+                InsertCodes = m_Client.InsertCodeToArray(Params("insert_code"))
+                If (Not InsertCodes) <> -1 Then
+                    Params("insert_code") = InsertCodes
+                End If
+            End If
+            Set aryTo(i) = Params
+            i = i + 1
+        Next Val
+        BuildParams.Add "to", aryTo
+    End If
 End Function
+
