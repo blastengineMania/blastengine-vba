@@ -28,12 +28,17 @@ End Property
 
 Function Transaction() As Transaction
     Set Transaction = New Transaction
-    Transaction.client = Me
+    Transaction.Client = Me
 End Function
 
 Function Bulk() As Bulk
     Set Bulk = New Bulk
-    Bulk.client = Me
+    Bulk.Client = Me
+End Function
+
+Function Mail() As Mail
+    Set Mail = New Mail
+    Mail.Client = Me
 End Function
 
 Property Get Token() As String
@@ -45,26 +50,95 @@ Property Get EndPoint() As String
 End Property
 
 Function SendText(method As WebMethod, strPath As String, Query As Dictionary, Body As Dictionary) As Dictionary
-    Dim client As New WebClient
-    client.BaseUrl = EndPoint
+    Dim Client As New WebClient
+    Client.BaseUrl = EndPoint
     Dim Request As New WebRequest
+    strPath = Replace(strPath, "https://app.engn.jp/", "")
     Request.Resource = strPath
     Request.method = method
     Request.AddHeader "Authorization", "Bearer " & Token
     Request.AddHeader "Content-Type", "application/json"
-    If (method = HttpPost Or httpPatch Or httpPut) And Body.Count > 0 Then
+    ' Debug.Print JsonConverter.ConvertToJson(Body)
+    If (method = httpPost Or httpPatch Or httpPut) And Body.Count > 0 Then
         Set Request.Body = Body
     End If
     WebHelpers.EnableLogging = False ' デバッグ用
     Dim Response As WebResponse
-    Set Response = client.Execute(Request)
+    Set Response = Client.Execute(Request)
+        
     Set SendText = JsonConverter.ParseJson(Response.Content)
     
-    Set client = Nothing
+    Set Client = Nothing
     Set Request = Nothing
     Set Response = Nothing
 End Function
 
+Function GetFile(strUrl As String) As String
+    Dim objHTTP As XMLHTTP60
+    Dim Params As Variant
+    Dim strResult As String
+    Set objHTTP = New XMLHTTP60
+    Dim strMethod As String
+    Dim zipFile As String
+    zipFile = CreateTemporaryFile("zip")
+    ' Debug.Print zipFile
+    Dim stream As ADODB.stream
+    Dim shellApp As Object
+    Dim fileName As String
+    Dim fileNum As Integer
+    Dim fileFullPath As String
+
+    strMethod = "GET"
+    objHTTP.Open strMethod, strUrl, False
+    objHTTP.setRequestHeader "Authorization", "Bearer " & Token
+    objHTTP.Send
+    If objHTTP.Status = 200 Then
+        Set stream = New ADODB.stream
+        stream.Type = 1
+        stream.Open
+        stream.Write objHTTP.responseBody
+        stream.SaveToFile zipFile, 2
+        stream.Close
+        Application.Wait (Now + TimeValue("0:00:02"))
+        extractFolderPath = CreateTemporaryFolder()
+        Set shellApp = CreateObject("Shell.Application")
+        shellApp.Namespace(extractFolderPath).CopyHere shellApp.Namespace(CVar(zipFile)).Items
+        fileName = Dir(extractFolderPath & "\*.csv")
+        stream.Open
+        stream.Type = adTypeBinary
+        stream.LoadFromFile extractFolderPath & "\" & fileName
+        GetFile = GetString(stream.Read, "UTF-8")
+        stream.Close
+    Else
+        GetFile = StrConv(objHTTP.responseBody, vbUnicode)
+    End If
+    Set objHTTP = Nothing
+    Set stream = Nothing
+    Set shellApp = Nothing
+End Function
+
+Sub SetDate(ByRef Val As Date, Value As Variant)
+    Dim str As String
+    If IsNull(Value) = False Then
+        str = CStr(Value)
+        Val = ConvertISO8601ToDate(str)
+    End If
+End Sub
+
+Public Function GetString(ByRef bin, ByVal encoding As String) As String
+    Const adTypeBinary = 1
+    Const adTypeText = 2
+    With CreateObject("ADODB.Stream")
+        .Open
+        .Type = adTypeBinary
+        .Write bin
+        .Position = 0
+        .Type = adTypeText
+        .Charset = encoding
+        GetString = .ReadText
+        .Close
+    End With
+End Function
 
 Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionary, aryFiles() As String) As Dictionary
     ' Dim Data As Dictionary
@@ -83,7 +157,7 @@ Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionar
     stream.WriteText "Content-Type: application/json" & vbCrLf
     stream.WriteText "" & vbCrLf
     stream.WriteText JsonConverter.ConvertToJson(Data)
-    
+        
     Dim p As Long
     If (Not aryFiles) <> -1 Then
         For Each FilePath In aryFiles
@@ -102,7 +176,7 @@ Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionar
     
     Set objHTTP = New XMLHTTP60
     Dim strMethod As String
-    strMethod = IIf(httpMethod = HttpPost, "POST", "GET")
+    strMethod = IIf(httpMethod = httpPost, "POST", "GET")
     objHTTP.Open strMethod, EndPoint & strPath, False
     objHTTP.setRequestHeader "Content-Type", "multipart/form-data; boundary=--" & Boundary
     objHTTP.setRequestHeader "Authorization", "Bearer " & Token
@@ -110,7 +184,7 @@ Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionar
     objHTTP.Send Params
     Set stream = Nothing
     
-    strResult = StrConv(objHTTP.responsebody, vbUnicode)
+    strResult = StrConv(objHTTP.responseBody, vbUnicode)
     If objHTTP.Status <> 201 Then
         Set SendFiles = JsonConverter.ParseJson(strResult)
     Else
@@ -123,12 +197,30 @@ Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionar
     Set objHTTP = Nothing
 End Function
 
+Function Delete(DeliveryId As Long) As Boolean
+    Dim dictResult As Dictionary
+    Dim strPath As String
+    strPath = "/api/v1/deliveries/" & DeliveryId
+    Set dictResult = SendText(HttpDelete, strPath, New Dictionary, New Dictionary)
+    If dictResult.Exists("error_messages") Then
+        ' Error
+        Set m_Error = dictResult("error_messages")
+        Delete = False
+    Else
+        Delete = True
+    End If
+    Set dictResult = Nothing
+End Function
+
 Function InsertCodeToArray(InsertCode As Dictionary) As Dictionary()
     Dim Key As Variant
     Dim i As Long
     i = 0
     Dim InsertCodes() As Dictionary
-    ReDim InsertCodes(UBound(InsertCode.Keys)) As Dictionary
+    If InsertCode.Count = 0 Then
+        Exit Function
+    End If
+    ReDim InsertCodes(InsertCode.Count - 1) As Dictionary
     For Each Key In InsertCode.Keys
         Dim Params As Dictionary
         Set Params = New Dictionary
@@ -139,6 +231,66 @@ Function InsertCodeToArray(InsertCode As Dictionary) As Dictionary()
     Next Key
     
     InsertCodeToArray = InsertCodes
+End Function
+
+Function CreateTemporaryFile(extension As String) As String
+    Dim tempPath As String
+    Dim tempFileName As String
+    Dim fullPath As String
+    Dim fileNum As Integer
+    
+    ' テンポラリフォルダのパスを取得
+    tempPath = Environ("TEMP")
+
+    ' テンポラリファイル名を生成
+    tempFileName = "TempFile_" & RandomString(10) & "." & extension
+
+    ' フルパスを生成
+    CreateTemporaryFile = tempPath & "\" & tempFileName
+End Function
+
+Function CreateTemporaryFolder() As String
+    Dim tempFolderPath As String
+    Dim newTempFolderPath As String
+    Dim fso As Object
+    Dim uniqueID As String
+
+    ' FileSystemObjectを作成
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' Windowsの一時フォルダパスを取得
+    tempFolderPath = Environ("TEMP")
+
+    ' ユニークなフォルダ名を生成
+    uniqueID = fso.GetTempName
+
+    ' 新しいテンポラリフォルダのパスを作成
+    newTempFolderPath = fso.BuildPath(tempFolderPath, uniqueID)
+
+    ' テンポラリフォルダを作成
+    If Not fso.FolderExists(newTempFolderPath) Then
+        fso.CreateFolder newTempFolderPath
+        CreateTemporaryFolder = newTempFolderPath
+    Else
+        CreateTemporaryFolder = ""
+    End If
+    ' オブジェクトを解放
+    Set fso = Nothing
+End Function
+
+
+Function IndexOf(arr As Variant, Value As Variant) As Long
+    Dim i As Long
+    ' 初期値を-1に設定
+    IndexOf = -1
+    
+    ' 配列の要素をループ
+    For i = LBound(arr) To UBound(arr)
+        If arr(i) = Value Then
+            IndexOf = i
+            Exit Function
+        End If
+    Next i
 End Function
 
 Function ConvertToISO8601(dateValue As Date, Optional offset As Integer = 540) As String
@@ -178,6 +330,25 @@ Function ConvertToISO8601(dateValue As Date, Optional offset As Integer = 540) A
     ' Concatenate parts into ISO8601 format
     ConvertToISO8601 = yearStr & "-" & monthStr & "-" & dayStr & "T" & _
                        hourStr & ":" & minuteStr & ":" & secondStr & timezoneStr
+End Function
+
+Function ConvertISO8601ToDate(isoDate As String) As Date
+    Dim datePart As String
+    Dim timePart As String
+    Dim tzPart As String
+    Dim dt As Date
+    Dim timeZoneOffset As Integer
+    
+    ' ??????????
+    datePart = Left(isoDate, 10)
+    timePart = Mid(isoDate, 12, 8)
+    tzPart = Mid(isoDate, 20, 3)
+    
+    dt = CDate(datePart & " " & timePart)
+    
+    timeZoneOffset = CInt(tzPart)
+    
+    ConvertISO8601ToDate = DateAdd("h", -timeZoneOffset, dt)
 End Function
 
 Private Sub AddAttachmentToStream(stream As ADODB.stream, FilePath As Variant, Boundary As String)

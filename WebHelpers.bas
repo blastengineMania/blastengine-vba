@@ -341,8 +341,8 @@ End Enum
 ' @default HttpGet
 ''
 Public Enum WebMethod
-    HttpGet = 0
-    HttpPost = 1
+    httpGet = 0
+    httpPost = 1
     httpPut = 2
     HttpDelete = 3
     httpPatch = 4
@@ -521,10 +521,10 @@ End Sub
 ' @param {WebClient} Client
 ' @param {WebRequest} Request
 ''
-Public Sub LogRequest(client As WebClient, Request As WebRequest)
+Public Sub LogRequest(Client As WebClient, Request As WebRequest)
     If EnableLogging Then
         Debug.Print "--> Request - " & Format(Now, "Long Time")
-        Debug.Print MethodToName(Request.method) & " " & client.GetFullUrl(Request)
+        Debug.Print MethodToName(Request.method) & " " & Client.GetFullUrl(Request)
 
         Dim web_KeyValue As Dictionary
         For Each web_KeyValue In Request.Headers
@@ -551,7 +551,7 @@ End Sub
 ' @param {WebRequest} Request
 ' @param {WebResponse} Response
 ''
-Public Sub LogResponse(client As WebClient, Request As WebRequest, Response As WebResponse)
+Public Sub LogResponse(Client As WebClient, Request As WebRequest, Response As WebResponse)
     If EnableLogging Then
         Dim web_KeyValue As Dictionary
 
@@ -1573,9 +1573,9 @@ Public Function MethodToName(method As WebMethod) As String
         MethodToName = "PUT"
     Case WebMethod.httpPatch
         MethodToName = "PATCH"
-    Case WebMethod.HttpPost
+    Case WebMethod.httpPost
         MethodToName = "POST"
-    Case WebMethod.HttpGet
+    Case WebMethod.httpGet
         MethodToName = "GET"
     Case WebMethod.HttpHead
         MethodToName = "HEAD"

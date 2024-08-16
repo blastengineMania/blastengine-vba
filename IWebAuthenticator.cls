@@ -30,7 +30,7 @@ Option Explicit
 ' @param {WebClient} Client The client that is about to execute the request
 ' @param in|out {WebRequest} Request The request about to be executed
 ''
-Public Sub BeforeExecute(ByVal client As WebClient, ByRef Request As WebRequest)
+Public Sub BeforeExecute(ByVal Client As WebClient, ByRef Request As WebRequest)
     ' e.g Add headers, cookies, etc.
 End Sub
 
@@ -42,7 +42,7 @@ End Sub
 ' @param {WebRequest} Request The request that was just executed
 ' @param in|out {WebResponse} Response to request
 ''
-Public Sub AfterExecute(ByVal client As WebClient, ByVal Request As WebRequest, ByRef Response As WebResponse)
+Public Sub AfterExecute(ByVal Client As WebClient, ByVal Request As WebRequest, ByRef Response As WebResponse)
     ' e.g. Handle 401 Unauthorized or other issues
 End Sub
 
@@ -54,7 +54,7 @@ End Sub
 ' @param {WebRequest} Request
 ' @param in|out {WinHttpRequest} Http
 ''
-Public Sub PrepareHttp(ByVal client As WebClient, ByVal Request As WebRequest, ByRef Http As Object)
+Public Sub PrepareHttp(ByVal Client As WebClient, ByVal Request As WebRequest, ByRef Http As Object)
     ' e.g. Update option, headers, etc.
 End Sub
 
@@ -66,6 +66,6 @@ End Sub
 ' @param {WebRequest} Request
 ' @param in|out {String} Curl
 ''
-Public Sub PrepareCurl(ByVal client As WebClient, ByVal Request As WebRequest, ByRef Curl As String)
+Public Sub PrepareCurl(ByVal Client As WebClient, ByVal Request As WebRequest, ByRef Curl As String)
     ' e.g. Add flags to cURL
 End Sub

@@ -23,24 +23,72 @@ Private m_Error As Dictionary
 Private m_Attachments() As String
 Private m_Response As Dictionary
 
+Private m_DeliveryType As String
+Private m_Status As String
+Private m_TotalCount As Long
+Private m_SentCount As Long
+Private m_DropCount As Long
+Private m_HardErrorCount As Long
+Private m_SoftErrorCount As Long
+Private m_OpenCount As Long
+Private m_DeliveryTime As Date
+Private m_ReservationTime As Date
+Private m_CreatedTime As Date
+Private m_UpdatedTime As Date
+
 Private Sub Class_Initialize()
     m_Encode = "UTF-8"
     Set m_InsertCode = New Dictionary
     Set m_Error = New Dictionary
 End Sub
 
-Property Let client(client As Blastengine)
-    Set m_Client = client
+Property Let Client(Client As Blastengine)
+    Set m_Client = Client
 End Property
+
+Function Info() As Boolean
+    Dim dictResult As Dictionary
+    Dim strPath As String
+    strPath = "/api/v1/deliveries/" & m_DeliveryId
+    Set dictResult = m_Client.SendText(httpGet, strPath, New Dictionary, New Dictionary)
+    If dictResult.Exists("error_messages") Then
+        ' Error
+        Set m_Error = dictResult("error_messages")
+        Info = False
+        Exit Function
+    End If
+    m_From.Name = dictResult("from")("name") & ""
+    m_From.Email = dictResult("from")("email")
+    m_Subject = dictResult("subject")
+    m_TextPart = dictResult("text_part")
+    m_HtmlPart = dictResult("html_part") & ""
+    
+    m_Client.SetDate m_DeliveryTime, dictResult("delivery_time")
+    m_Client.SetDate m_ReservationTime, dictResult("reservation_time")
+    m_Client.SetDate m_CreatedTime, dictResult("created_time")
+    m_Client.SetDate m_UpdatedTime, dictResult("updated_time")
+    
+    m_DeliveryType = dictResult("delivery_type")
+    m_Status = dictResult("status")
+    m_TotalCount = dictResult("total_count")
+    m_SentCount = dictResult("sent_count")
+    m_DropCount = dictResult("drop_count")
+    m_HardErrorCount = dictResult("hard_error_count")
+    m_SoftErrorCount = dictResult("soft_error_count")
+    m_OpenCount = dictResult("open_count")
+    
+    ' Debug.Print JsonConverter.ConvertToJson(dictResult)
+    Info = True
+End Function
 
 Function Send() As Boolean
     Dim dictResult As Dictionary
     Dim strPath As String
     strPath = "/api/v1/deliveries/transaction"
     If (Not m_Attachments) = -1 Then
-        Set dictResult = m_Client.SendText(HttpPost, strPath, New Dictionary, BuildParams)
+        Set dictResult = m_Client.SendText(httpPost, strPath, New Dictionary, BuildParams)
     Else
-        Set dictResult = m_Client.SendFiles(HttpPost, strPath, BuildParams, m_Attachments)
+        Set dictResult = m_Client.SendFiles(httpPost, strPath, BuildParams, m_Attachments)
     End If
     If dictResult.Exists("error_messages") Then
         ' Error
@@ -51,6 +99,14 @@ Function Send() As Boolean
         Send = True
     End If
 End Function
+
+Function Delete() As Boolean
+    Delete = m_Client.Delete(m_DeliveryId)
+End Function
+
+Property Let DeliveryId(ByVal Value As Long)
+    m_DeliveryId = Value
+End Property
 
 Property Let Email(ByVal Email As String)
     m_To = Email
@@ -69,6 +125,50 @@ End Property
 Property Get DeliveryId() As Long
     DeliveryId = m_DeliveryId
 End Property
+
+Property Get Status() As String
+    Status = m_Status
+End Property
+
+Property Get DeliveryTime() As Date
+    DeliveryTime = m_DeliveryTime
+End Property
+
+Property Get UpdatedTime() As Date
+    UpdatedTime = m_UpdatedTime
+End Property
+
+Property Get CreatedTime() As Date
+    CreatedTime = m_CreatedTime
+End Property
+
+Property Get ReservationTime() As Date
+    ReservationTime = m_ReservationTime
+End Property
+
+Property Get DeliveryType() As String
+    DeliveryType = m_DeliveryType
+End Property
+
+Property Get OpenCount() As Long
+    OpenCount = m_OpenCount
+End Property
+Property Get TotalCount() As Long
+    TotalCount = m_TotalCount
+End Property
+Property Get SentCount() As Long
+    SentCount = m_SentCount
+End Property
+Property Get DropCount() As Long
+    DropCount = m_DropCount
+End Property
+Property Get SoftErrorCount() As Long
+    SoftErrorCount = m_SoftErrorCount
+End Property
+Property Get HardErrorCount() As Long
+    HardErrorCount = m_HardErrorCount
+End Property
+
 
 Property Get Error() As Dictionary
     Set Error = m_Error
@@ -131,7 +231,7 @@ Function BuildParams() As Dictionary
     i = 0
     Dim InsertCodes() As Dictionary
     InsertCodes = m_Client.InsertCodeToArray(m_InsertCode)
-    If (Not InsertCodes) <> -1 Then
+    If (Not InsertCodes) > -1 Then
         BuildParams.Add "insert_code", InsertCodes
     End If
     BuildParams.Add "subject", m_Subject

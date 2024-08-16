@@ -36,3 +36,4 @@ Public Function CryptBytesToString(ByRef bData() As Byte) As String
     End If
 End Function
 
+
