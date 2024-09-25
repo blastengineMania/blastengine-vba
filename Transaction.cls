@@ -104,8 +104,8 @@ Function Delete() As Boolean
     Delete = m_Client.Delete(m_DeliveryId)
 End Function
 
-Property Let DeliveryId(ByVal Value As Long)
-    m_DeliveryId = Value
+Property Let DeliveryId(ByVal value As Long)
+    m_DeliveryId = value
 End Property
 
 Property Let Email(ByVal Email As String)

@@ -139,6 +139,7 @@ Public Sub CreateFromHttp(Client As WebClient, Request As WebRequest, Http As Ob
     Me.StatusCode = Http.Status
     Me.StatusDescription = Http.StatusText
     Me.Content = Http.ResponseText
+    
     Me.Body = Http.responseBody
 
     web_LoadValues Http.GetAllResponseHeaders, Me.Content, Me.Body, Request
@@ -154,6 +155,7 @@ web_ErrorHandling:
     WebHelpers.LogError web_ErrorDescription, "WebResponse.CreateFromHttp", 11030 + vbObjectError
     Err.Raise 11030 + vbObjectError, "WebResponse.CreateFromHttp", web_ErrorDescription
 End Sub
+
 
 ''
 ' Create response from cURL
@@ -232,7 +234,7 @@ Public Function ExtractHeaders(ResponseHeaders As String) As Collection
             If Not web_Multiline Then
                 Set web_Header = WebHelpers.CreateKeyValue( _
                     Key:=VBA.Trim(VBA.Mid$(web_Lines(web_i), 1, web_ColonPosition - 1)), _
-                    Value:=VBA.Trim(VBA.Mid$(web_Lines(web_i), web_ColonPosition + 1, VBA.Len(web_Lines(web_i)))) _
+                    value:=VBA.Trim(VBA.Mid$(web_Lines(web_i), web_ColonPosition + 1, VBA.Len(web_Lines(web_i)))) _
                 )
             Else
                 web_Header("Value") = web_Header("Value") & web_CrLf & web_Lines(web_i)

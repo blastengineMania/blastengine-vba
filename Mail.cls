@@ -190,7 +190,7 @@ Function SendBulk(Optional ByVal dateReservationTime As Date = -1) As Boolean
             Exit Function
         End If
         While Mail.Job.Finished = False
-            Application.Wait (Now + TimeValue("0:00:01"))
+            Application.WAIT (Now + TimeValue("0:00:01"))
         Wend
         
         If Mail.Job.IsError Then
@@ -224,8 +224,8 @@ Function Delete() As Boolean
     Delete = m_Client.Delete(m_DeliveryId)
 End Function
 
-Property Let DeliveryId(ByVal Value As Long)
-    m_DeliveryId = Value
+Property Let DeliveryId(ByVal value As Long)
+    m_DeliveryId = value
 End Property
 
 Property Let Cc(i As Long, ByVal Email As String)
@@ -270,6 +270,31 @@ Property Let ListUnsubscribe(ListUnsubscribe As ListUnsubscribe)
     m_ListUnsubscribe = ListUnsubscribe
 End Property
 
+Property Let DeliveryTime(value As Date)
+    m_DeliveryTime = value
+End Property
+
+Property Let UpdatedTime(value As Date)
+    m_UpdatedTime = value
+End Property
+
+Property Let CreatedTime(value As Date)
+    m_CreatedTime = value
+End Property
+
+Property Let ReservationTime(value As Date)
+    m_ReservationTime = value
+End Property
+
+Property Let DeliveryType(value As String)
+    m_DeliveryType = value
+End Property
+
+Property Let Status(value As String)
+    m_Status = value
+End Property
+
+
 Sub Email(ByVal Email As String, Optional ByVal InsertCode As Dictionary = -1)
     On Error GoTo Skip
     Dim i As Long
@@ -285,6 +310,14 @@ Sub Email(ByVal Email As String, Optional ByVal InsertCode As Dictionary = -1)
 Skip:
     Set m_To(i) = Params
 End Sub
+
+Property Get Subject() As String
+    Subject = m_Subject
+End Property
+
+Property Get FromProps() As Dictionary
+    FromProps = m_From
+End Property
 
 Property Get DeliveryId() As Long
     DeliveryId = m_DeliveryId

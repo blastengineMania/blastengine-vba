@@ -41,6 +41,21 @@ Function Mail() As Mail
     Mail.Client = Me
 End Function
 
+Function MailQuery() As MailQuery
+    Set MailQuery = New MailQuery
+    MailQuery.Client = Me
+End Function
+
+Function Log() As Log
+    Set Log = New Log
+    Log.Client = Me
+End Function
+
+Function LogQuery() As LogQuery
+    Set LogQuery = New LogQuery
+    LogQuery.Client = Me
+End Function
+
 Property Get Token() As String
     Token = EncodeToBase64(LCase(SHA256(m_UserId & m_ApiKey)))
 End Property
@@ -53,16 +68,25 @@ Function SendText(method As WebMethod, strPath As String, Query As Dictionary, B
     Dim Client As New WebClient
     Client.BaseUrl = EndPoint
     Dim Request As New WebRequest
-    strPath = Replace(strPath, "https://app.engn.jp/", "")
-    Request.Resource = strPath
     Request.method = method
+    Dim QueryString() As String
+    ReDim QueryString(UBound(Query.Items))
+    
+    Dim i As Integer
+    For i = 0 To UBound(Query.Items)
+        QueryString(i) = Query.Keys(i) & "=" & WorksheetFunction.EncodeURL(Query.Item(Query.Keys(i)))
+    Next i
+    
+    strPath = Replace(strPath, "https://app.engn.jp/", "")
+    Request.Resource = strPath & "?" & Join(QueryString, "&")
+
     Request.AddHeader "Authorization", "Bearer " & Token
     Request.AddHeader "Content-Type", "application/json"
     ' Debug.Print JsonConverter.ConvertToJson(Body)
     If (method = httpPost Or httpPatch Or httpPut) And Body.Count > 0 Then
         Set Request.Body = Body
     End If
-    WebHelpers.EnableLogging = False ' デバッグ用
+    WebHelpers.EnableLogging = True ' デバッグ用
     Dim Response As WebResponse
     Set Response = Client.Execute(Request)
         
@@ -82,7 +106,7 @@ Function GetFile(strUrl As String) As String
     Dim zipFile As String
     zipFile = CreateTemporaryFile("zip")
     ' Debug.Print zipFile
-    Dim stream As ADODB.stream
+    Dim Stream As ADODB.Stream
     Dim shellApp As Object
     Dim fileName As String
     Dim fileNum As Integer
@@ -93,34 +117,34 @@ Function GetFile(strUrl As String) As String
     objHTTP.setRequestHeader "Authorization", "Bearer " & Token
     objHTTP.Send
     If objHTTP.Status = 200 Then
-        Set stream = New ADODB.stream
-        stream.Type = 1
-        stream.Open
-        stream.Write objHTTP.responseBody
-        stream.SaveToFile zipFile, 2
-        stream.Close
-        Application.Wait (Now + TimeValue("0:00:02"))
+        Set Stream = New ADODB.Stream
+        Stream.Type = 1
+        Stream.Open
+        Stream.Write objHTTP.responseBody
+        Stream.SaveToFile zipFile, 2
+        Stream.Close
+        Application.WAIT (Now + TimeValue("0:00:02"))
         extractFolderPath = CreateTemporaryFolder()
         Set shellApp = CreateObject("Shell.Application")
         shellApp.Namespace(extractFolderPath).CopyHere shellApp.Namespace(CVar(zipFile)).Items
         fileName = Dir(extractFolderPath & "\*.csv")
-        stream.Open
-        stream.Type = adTypeBinary
-        stream.LoadFromFile extractFolderPath & "\" & fileName
-        GetFile = GetString(stream.Read, "UTF-8")
-        stream.Close
+        Stream.Open
+        Stream.Type = adTypeBinary
+        Stream.LoadFromFile extractFolderPath & "\" & fileName
+        GetFile = GetString(Stream.Read, "UTF-8")
+        Stream.Close
     Else
         GetFile = StrConv(objHTTP.responseBody, vbUnicode)
     End If
     Set objHTTP = Nothing
-    Set stream = Nothing
+    Set Stream = Nothing
     Set shellApp = Nothing
 End Function
 
-Sub SetDate(ByRef Val As Date, Value As Variant)
+Sub SetDate(ByRef Val As Date, value As Variant)
     Dim str As String
-    If IsNull(Value) = False Then
-        str = CStr(Value)
+    If IsNull(value) = False Then
+        str = CStr(value)
         Val = ConvertISO8601ToDate(str)
     End If
 End Sub
@@ -140,35 +164,91 @@ Public Function GetString(ByRef bin, ByVal encoding As String) As String
     End With
 End Function
 
+
+Function QueryRequest(strPath As String, Query As Dictionary) As Dictionary
+    Dim objHTTP As XMLHTTP60
+    Dim Params As Variant
+    Dim strResult As String
+
+    Dim QueryString() As String
+    If UBound(Query.Items) > -1 Then
+        ReDim QueryString(UBound(Query.Items))
+        
+        Dim re As Object
+        Set re = CreateObject("VBScript.RegExp")
+        re.Global = True
+        re.IgnoreCase = True
+        re.Pattern = "\[[0-9]+\]"
+        
+        Dim i As Integer
+        For i = 0 To UBound(Query.Items)
+            QueryString(i) = re.Replace(Query.Keys(i), "[]") & "=" & WorksheetFunction.EncodeURL(Query.Item(Query.Keys(i)))
+        Next i
+        strPath = Replace(strPath, "https://app.engn.jp/", "") & "?" & Join(QueryString, "&")
+    End If
+    Set objHTTP = New XMLHTTP60
+    Dim strMethod As String
+    strMethod = "GET"
+    objHTTP.Open "GET", EndPoint & strPath, False
+    objHTTP.setRequestHeader "Content-Type", "application/json;"
+    objHTTP.setRequestHeader "Authorization", "Bearer " & Token
+    objHTTP.Send
+    
+    strResult = ConvertString(objHTTP.responseBody, "UTF-8")
+    
+    If objHTTP.Status <> 200 Then
+        Set QueryRequest = JsonConverter.ParseJson(strResult)
+    Else
+        Dim Json As Dictionary
+        Set QueryRequest = JsonConverter.ParseJson(strResult)
+    End If
+    Set objHTTP = Nothing
+End Function
+
+Public Function ConvertString(ByRef utf8Text, ByVal encoding As String) As String
+    Const adTypeBinary = 1
+    Const adTypeText = 2
+    With CreateObject("ADODB.Stream")
+        .Open
+        .Type = adTypeBinary
+        .Write utf8Text
+        .Position = 0
+        .Type = adTypeText
+        .Charset = encoding
+        ConvertString = .ReadText
+        .Close
+    End With
+End Function
+
 Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionary, aryFiles() As String) As Dictionary
     ' Dim Data As Dictionary
     ' Set Data = BuildParams
     Dim Boundary As String
     Boundary = RandomString(24)
     Dim FilePath
-    Dim stream As ADODB.stream
-    Set stream = New ADODB.stream
-    stream.Charset = "UTF-8"
-    stream.Open
-    stream.Position = 0
-    stream.Type = adTypeText
-    stream.WriteText "----" & Boundary & vbCrLf
-    stream.WriteText "Content-Disposition: form-data; name=""data""; filename=""base.json""" & vbCrLf
-    stream.WriteText "Content-Type: application/json" & vbCrLf
-    stream.WriteText "" & vbCrLf
-    stream.WriteText JsonConverter.ConvertToJson(Data)
+    Dim Stream As ADODB.Stream
+    Set Stream = New ADODB.Stream
+    Stream.Charset = "UTF-8"
+    Stream.Open
+    Stream.Position = 0
+    Stream.Type = adTypeText
+    Stream.WriteText "----" & Boundary & vbCrLf
+    Stream.WriteText "Content-Disposition: form-data; name=""data""; filename=""base.json""" & vbCrLf
+    Stream.WriteText "Content-Type: application/json" & vbCrLf
+    Stream.WriteText "" & vbCrLf
+    Stream.WriteText JsonConverter.ConvertToJson(Data)
         
     Dim p As Long
     If (Not aryFiles) <> -1 Then
         For Each FilePath In aryFiles
-            AddAttachmentToStream stream, FilePath, Boundary
+            AddAttachmentToStream Stream, FilePath, Boundary
         Next FilePath
     End If
     
-    ChangeStreamType stream, adTypeText
-    stream.WriteText vbCrLf & "----" & Boundary & "--" & vbCrLf
-    ChangeStreamType stream, adTypeBinary
-    stream.Position = 0
+    ChangeStreamType Stream, adTypeText
+    Stream.WriteText vbCrLf & "----" & Boundary & "--" & vbCrLf
+    ChangeStreamType Stream, adTypeBinary
+    Stream.Position = 0
     
     Dim objHTTP As XMLHTTP60
     Dim Params As Variant
@@ -180,9 +260,9 @@ Function SendFiles(httpMethod As WebMethod, strPath As String, Data As Dictionar
     objHTTP.Open strMethod, EndPoint & strPath, False
     objHTTP.setRequestHeader "Content-Type", "multipart/form-data; boundary=--" & Boundary
     objHTTP.setRequestHeader "Authorization", "Bearer " & Token
-    Params = stream.Read
+    Params = Stream.Read
     objHTTP.Send Params
-    Set stream = Nothing
+    Set Stream = Nothing
     
     strResult = StrConv(objHTTP.responseBody, vbUnicode)
     If objHTTP.Status <> 201 Then
@@ -233,6 +313,25 @@ Function InsertCodeToArray(InsertCode As Dictionary) As Dictionary()
     InsertCodeToArray = InsertCodes
 End Function
 
+Function StringToStatus(value As String) As StatusType
+    Select Case value
+    Case "EDIT"
+        StringToStatus = EDIT
+    Case "IMPORTING"
+        StringToStatus = IMPORTING
+    Case "RESERVE"
+        StringToStatus = RESERVE
+    Case "WAIT"
+        StringToStatus = WAIT
+    Case "SENDING"
+        StringToStatus = SENDING
+    Case "SENT"
+        StringToStatus = SENT
+    Case "FAILED"
+        StringToStatus = FAILED
+    End Select
+End Function
+
 Function CreateTemporaryFile(extension As String) As String
     Dim tempPath As String
     Dim tempFileName As String
@@ -279,19 +378,49 @@ Function CreateTemporaryFolder() As String
 End Function
 
 
-Function IndexOf(arr As Variant, Value As Variant) As Long
+Function IndexOf(arr As Variant, value As Variant) As Long
     Dim i As Long
     ' 初期値を-1に設定
     IndexOf = -1
     
     ' 配列の要素をループ
     For i = LBound(arr) To UBound(arr)
-        If arr(i) = Value Then
+        If arr(i) = value Then
             IndexOf = i
             Exit Function
         End If
     Next i
 End Function
+
+Sub ArrayToString(ByRef dict As Dictionary, strKey As String, aryString() As String)
+    If (Not aryString) <> -1 Then
+        Dim Key As Variant
+        Dim i As Integer
+        i = 0
+        For Each Key In aryString
+            dict.Add strKey & "[" & i & "]", Key
+            i = i + 1
+        Next Key
+    End If
+End Sub
+
+Sub AddStringQuery(ByRef dict As Dictionary, strKey As String, value As String)
+    If value <> "" Then
+        dict.Add strKey, value
+    End If
+End Sub
+
+Sub AddIntegerQuery(ByRef dict As Dictionary, strKey As String, value As Integer)
+    If value > 0 Then
+        dict.Add strKey, value
+    End If
+End Sub
+
+Sub AddLongQuery(ByRef dict As Dictionary, strKey As String, value As Long)
+    If value > 0 Then
+        dict.Add strKey, value
+    End If
+End Sub
 
 Function ConvertToISO8601(dateValue As Date, Optional offset As Integer = 540) As String
     ' Declare variables
@@ -351,35 +480,35 @@ Function ConvertISO8601ToDate(isoDate As String) As Date
     ConvertISO8601ToDate = DateAdd("h", -timeZoneOffset, dt)
 End Function
 
-Private Sub AddAttachmentToStream(stream As ADODB.stream, FilePath As Variant, Boundary As String)
-    Dim file As ADODB.stream
-    Set file = New ADODB.stream
+Private Sub AddAttachmentToStream(Stream As ADODB.Stream, FilePath As Variant, Boundary As String)
+    Dim file As ADODB.Stream
+    Set file = New ADODB.Stream
     file.Open
     file.Type = adTypeBinary
     file.LoadFromFile FilePath
     
-    ChangeStreamType stream, adTypeText
-    stream.WriteText vbCrLf & "----" & Boundary & vbCrLf
-    stream.WriteText "Content-Disposition: form-data; name=""file""; filename=""" & Dir(FilePath) & """" & vbCrLf
-    stream.WriteText "Content-Type: application/octet-stream" & vbCrLf
-    stream.WriteText "" & vbCrLf
+    ChangeStreamType Stream, adTypeText
+    Stream.WriteText vbCrLf & "----" & Boundary & vbCrLf
+    Stream.WriteText "Content-Disposition: form-data; name=""file""; filename=""" & Dir(FilePath) & """" & vbCrLf
+    Stream.WriteText "Content-Type: application/octet-stream" & vbCrLf
+    Stream.WriteText "" & vbCrLf
     
-    ChangeStreamType stream, adTypeBinary
-    stream.Write file.Read()
+    ChangeStreamType Stream, adTypeBinary
+    Stream.Write file.Read()
     
     file.Close
     Set file = Nothing
 End Sub
 
-Private Sub ChangeStreamType(ByRef stream As ADODB.stream, adType As Integer)
+Private Sub ChangeStreamType(ByRef Stream As ADODB.Stream, adType As Integer)
     Dim p As Long
-    p = stream.Position
-    stream.Position = 0
-    stream.Type = adType
+    p = Stream.Position
+    Stream.Position = 0
+    Stream.Type = adType
     If adType = adTypeText Then
-        stream.Charset = "UTF-8"
+        Stream.Charset = "UTF-8"
     End If
-    stream.Position = p
+    Stream.Position = p
 End Sub
 
 
@@ -481,3 +610,4 @@ Private Function ConvertToBinary(ByRef text As String)
 
   ConvertToBinary = BinaryStream.Read
 End Function
+

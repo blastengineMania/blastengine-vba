@@ -42,8 +42,8 @@ Property Let Client(Client As Blastengine)
     Set m_Client = Client
 End Property
 
-Property Let DeliveryId(ByVal Value As Long)
-    m_DeliveryId = Value
+Property Let DeliveryId(ByVal value As Long)
+    m_DeliveryId = value
 End Property
 
 
