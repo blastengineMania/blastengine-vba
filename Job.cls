@@ -16,9 +16,15 @@ Private m_SuccessCount As Long
 Private m_FailedCount As Long
 Private m_TotalCount As Long
 Private m_ErrorFileUrl As String
+Private m_JobType As String
 
 Property Let Client(Client As Blastengine)
     Set m_Client = Client
+    m_JobType = "Import"
+End Property
+
+Property Let JobType(JobType As String)
+    m_JobType = JobType
 End Property
 
 Property Let Id(Id As Long)
@@ -81,12 +87,18 @@ Property Get IsError() As Long
     End If
 End Property
 
+Function GetUrl() As String
+    Select Case m_JobType
+    Case "Import"
+        GetUrl = "/api/v1/deliveries/-/emails/import/" & m_Id
+    Case "Error"
+        GetUrl = "/api/v1/errors/list/" & m_Id
+    End Select
+End Function
 
 Function Finished() As Boolean
     Dim dictResult As Dictionary
-    Dim strPath As String
-    strPath = "/api/v1/deliveries/-/emails/import/" & m_Id
-    Set dictResult = m_Client.SendText(httpGet, strPath, New Dictionary, New Dictionary)
+    Set dictResult = m_Client.SendText(httpGet, GetUrl, New Dictionary, New Dictionary)
     If dictResult.Exists("error_messages") Then
         ' Error
         Set m_Error = dictResult("error_messages")

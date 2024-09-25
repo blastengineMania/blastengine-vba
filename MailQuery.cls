@@ -111,7 +111,6 @@ Public Function Find() As Mail()
     Find = Search("/api/v1/deliveries")
 End Function
 
-
 Public Function All() As Mail()
     All = Search("/api/v1/deliveries/all")
 End Function

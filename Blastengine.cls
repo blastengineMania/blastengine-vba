@@ -56,6 +56,11 @@ Function LogQuery() As LogQuery
     LogQuery.Client = Me
 End Function
 
+Function Error() As Error
+    Set Error = New Error
+    Error.Client = Me
+End Function
+
 Property Get Token() As String
     Token = EncodeToBase64(LCase(SHA256(m_UserId & m_ApiKey)))
 End Property
@@ -70,15 +75,17 @@ Function SendText(method As WebMethod, strPath As String, Query As Dictionary, B
     Dim Request As New WebRequest
     Request.method = method
     Dim QueryString() As String
-    ReDim QueryString(UBound(Query.Items))
-    
-    Dim i As Integer
-    For i = 0 To UBound(Query.Items)
-        QueryString(i) = Query.Keys(i) & "=" & WorksheetFunction.EncodeURL(Query.Item(Query.Keys(i)))
-    Next i
-    
-    strPath = Replace(strPath, "https://app.engn.jp/", "")
-    Request.Resource = strPath & "?" & Join(QueryString, "&")
+    If UBound(Query.Items) > -1 Then
+        ReDim QueryString(UBound(Query.Items))
+        Dim i As Integer
+        For i = 0 To UBound(Query.Items)
+            QueryString(i) = Query.Keys(i) & "=" & WorksheetFunction.EncodeURL(Query.Item(Query.Keys(i)))
+        Next i
+        
+        strPath = Replace(strPath, "https://app.engn.jp/", "")
+        strPath = strPath & "?" & Join(QueryString, "&")
+    End If
+    Request.Resource = strPath
 
     Request.AddHeader "Authorization", "Bearer " & Token
     Request.AddHeader "Content-Type", "application/json"
@@ -86,7 +93,7 @@ Function SendText(method As WebMethod, strPath As String, Query As Dictionary, B
     If (method = httpPost Or httpPatch Or httpPut) And Body.Count > 0 Then
         Set Request.Body = Body
     End If
-    WebHelpers.EnableLogging = True ' デバッグ用
+    WebHelpers.EnableLogging = False ' デバッグ用
     Dim Response As WebResponse
     Set Response = Client.Execute(Request)
         
